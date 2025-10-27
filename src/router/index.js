@@ -20,6 +20,19 @@ const routes = [
           meta: { title: '工作台' }
         },
         {
+          path: 'project',
+          name: 'project',
+          redirect: '/project/list',
+          children: [
+            {
+              path: 'list',
+              name: 'project-list',
+              component: () => import('@/views/project/ProjectListView.vue'),
+              meta: { title: '项目列表' }
+            }
+          ]
+        },
+        {
           path: 'data',
           name: 'data',
           redirect: '/data/management',
@@ -49,13 +62,51 @@ const routes = [
               component: () => import('@/views/task/TaskListView.vue'),
               meta: { title: '任务列表' }
             },
-            // 以后我们会添加这个结果页
-            // {
-            //   path: 'result/:taskId',
-            //   name: 'task-result',
-            //   component: () => import('@/views/task/TaskResultView.vue'),
-            //   meta: { title: '任务结果' }
-            // }
+          ]
+        },
+        {
+          path: 'visualization',
+          name: 'visualization',
+          redirect: '/visualization/data',
+          children: [
+            {
+              path: 'data',
+              name: 'visualization-data',
+              component: () => import('@/views/visualization/DataVisualizationView.vue'),
+              meta: { title: '数据可视化' }
+            },
+            {
+              path: 'task',
+              name: 'visualization-task',
+              component: () => import('@/views/visualization/TaskResultVisualizationView.vue'),
+              meta: { title: '任务结果可视化' }
+            }
+          ]
+        },
+        {
+          path: 'user',
+          name: 'user',
+          redirect: '/user/list',
+          children: [
+            {
+              path: 'list',
+              name: 'user-list',
+              component: () => import('@/views/user/UserListView.vue'),
+              meta: { title: '用户列表' }
+            }
+          ]
+        },
+        {
+          path: 'api',
+          name: 'api',
+          redirect: '/api/list',
+          children: [
+            {
+              path: 'list',
+              name: 'api-list',
+              component: () => import('@/views/api/ApiListView.vue'),
+              meta: { title: '接口列表' }
+            }
           ]
         }
       ]
