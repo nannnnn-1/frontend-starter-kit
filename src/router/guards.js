@@ -3,7 +3,7 @@
 import { useUserStore } from '@/stores/userStore'
 
 // 定义一个不需要登录就能访问的页面的白名单
-const whiteList = ['/login']
+const whiteList = ['/login', '/dev/map-view', '/visualization/task']
 
 export function createRouterGuards(router) {
   router.beforeEach(async (to, from, next) => {

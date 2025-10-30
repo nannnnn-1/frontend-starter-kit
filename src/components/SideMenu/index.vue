@@ -51,11 +51,12 @@
           <template #icon><SettingOutlined /></template>
           <template #title>开发</template>
           <a-menu-item key="/dev/pro-table">ProTable</a-menu-item>
+          <a-menu-item key="/dev/map-view">MapView</a-menu-item>
         </a-sub-menu>
       </a-menu>
     </div>
   </template>
-  
+
   <script setup>
   import { ref, watch } from 'vue'
   import { useRouter, useRoute } from 'vue-router'
@@ -69,7 +70,7 @@
     ClockCircleOutlined,
     ApiOutlined,
   } from '@ant-design/icons-vue'
-  
+
   // 接收父组件传递过来的折叠状态
   defineProps({
     collapsed: {
@@ -77,25 +78,25 @@
       required: true,
     },
   })
-  
+
   const router = useRouter()
   const route = useRoute()
-  
+
   // 菜单选中状态与路由同步
   const selectedKeys = ref([route.path])
-  
+
   watch(
     () => route.path,
     (newPath) => {
       selectedKeys.value = [newPath]
     }
   )
-  
+
   const handleMenuClick = ({ key }) => {
     router.push(key)
   }
   </script>
-  
+
   <style scoped>
   .side-menu-container {
     height: 100%;

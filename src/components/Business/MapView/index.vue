@@ -1,65 +1,121 @@
 <template>
-    <div class="map-container">
-      <l-map ref="mapRef" :zoom="zoom" :center="center" style="height: 100%; width: 100%">
-        <!-- 底图图层 -->
-        <l-tile-layer
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          attribution="&copy; <a href='http://www.openstreetmap.org/copyright'>OpenStreetMap</a>"
-          layer-type="base"
-          name="OpenStreetMap"
-        ></l-tile-layer>
-  
-        <!-- 动态叠加图层 (例如，我们的结果掩码) -->
-        <l-image-overlay
-          v-if="overlayImage"
-          :url="overlayImage.url"
-          :bounds="overlayImage.bounds"
-          :opacity="overlayImage.opacity || 0.7"
-        ></l-image-overlay>
-        
-        <!-- 这里可以继续添加更多类型的图层，如GeoJSON, WMS等 -->
-      </l-map>
-    </div>
-  </template>
-  
-  <script setup>
-  import { ref } from 'vue';
-  import "leaflet/dist/leaflet.css";
-  import { LMap, LTileLayer, LImageOverlay } from "@vue-leaflet/vue-leaflet";
-  
-  const props = defineProps({
-    // 初始中心点
-    center: {
-      type: Array,
-      default: () => [39.9042, 116.4074], // 默认北京
-    },
-    // 初始缩放级别
-    zoom: {
-      type: Number,
-      default: 10,
-    },
-    // 要叠加的图片图层
-    overlayImage: {
-      type: Object, // 期望的格式: { url: '...', bounds: [[lat1, lng1], [lat2, lng2]], opacity: 0.7 }
-      default: null,
-    },
+  <!--
+    地图可视化组件（Cesium）
+    职责：
+    - 初始化 Cesium.Viewer（带 ArcGIS 影像底图）
+    - 将外部传入的图层（当前支持 imageOverlay）渲染为 ImageryLayer
+    - 在初始化完成后通过 ready 事件暴露 viewer 实例
+  -->
+  <div ref="cesiumContainer" class="cesium-container"></div>
+</template>
+
+<script setup>
+defineOptions({ name: 'MapViewComponent' });
+import { ref, onMounted, onBeforeUnmount, watch } from 'vue';
+import * as Cesium from 'cesium';
+
+// Props / Emits ----------------------------------------------------------------
+// layers: 图层数组。仅支持 type==='imageOverlay' 的单幅影像叠加（SingleTileImageryProvider）
+const props = defineProps({
+  layers: { type: Array, default: () => [], },
+});
+// ready: 初始化完成后向父组件抛出 viewer 实例
+const emit = defineEmits(['ready']);
+
+// State -------------------------------------------------------------------------
+const cesiumContainer = ref(null);
+let viewer = null; // Cesium.Viewer 实例
+// 记录已添加到场景中的图层（以 id 作为索引）
+let managedLayers = {};
+
+// Lifecycle ---------------------------------------------------------------------
+onMounted(() => { initCesium(); });
+onBeforeUnmount(() => {
+  if (viewer) { viewer.destroy(); viewer = null; }
+});
+// 深度监听图层属性变化（visible / opacity 等）
+watch(
+  () => props.layers,
+  (newLayers) => { if (viewer) { updateMapLayers(newLayers); } },
+  { deep: true }
+);
+
+// 初始化 Cesium.Viewer（默认 ArcGIS 影像底图）
+const initCesium = () => {
+  if (!cesiumContainer.value) return;
+
+  viewer = new Cesium.Viewer(cesiumContainer.value, {
+    imageryProvider: new Cesium.ArcGisMapServerImageryProvider({
+      url: 'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer'
+    }),
+    animation: false,
+    timeline: false,
+    homeButton: false,
+
   });
-  
-  const mapRef = ref(null);
-  
-  // 未来可以暴露一些方法给父组件调用，如 fitBounds, flyTo 等
-  // const fitToBounds = (bounds) => {
-  //   if (mapRef.value && mapRef.value.leafletObject) {
-  //     mapRef.value.leafletObject.fitBounds(bounds);
-  //   }
-  // }
-  // defineExpose({ fitToBounds });
-  </script>
-  
-  <style scoped>
-  .map-container {
-    width: 100%;
-    height: 100%;
-    min-height: 500px; /* 给一个最小高度，防止塌陷 */
+  // 隐藏版权信息容器（如需显示可移除此行）
+  if (viewer.cesiumWidget && viewer.cesiumWidget.creditContainer) {
+    viewer.cesiumWidget.creditContainer.style.display = 'none';
   }
-  </style>
+
+  updateMapLayers(props.layers);
+  emit('ready', viewer);
+};
+
+// 将图层描述转换为 Cesium ImageryProvider
+const createImageryProvider = (layerInfo) => {
+  switch (layerInfo.type) {
+    case 'imageOverlay': {
+      if (!layerInfo.url || !layerInfo.bounds) { return null; }
+      // bounds: [[南, 西], [北, 东]]，单位：经纬度（WGS84）
+      const rect = Cesium.Rectangle.fromDegrees(
+        layerInfo.bounds[0][1], layerInfo.bounds[0][0],
+        layerInfo.bounds[1][1], layerInfo.bounds[1][0]
+      );
+      // 单幅影像叠加到指定矩形范围
+      return new Cesium.SingleTileImageryProvider({
+        url: layerInfo.url,
+        rectangle: rect,
+        tileWidth: 256,
+        tileHeight: 256,
+      });
+    }
+    default:
+      return null;
+  }
+};
+
+// 同步外部图层数组到场景：新增/显隐/透明度/移除
+const updateMapLayers = (layersData) => {
+  if (!viewer || !Array.isArray(layersData)) return;
+  layersData.forEach(layerInfo => {
+    const existingLayer = managedLayers[layerInfo.id];
+    if (layerInfo.visible) {
+      if (!existingLayer) {
+        const newImageryProvider = createImageryProvider(layerInfo);
+        if (newImageryProvider) {
+          const newImageryLayer = viewer.imageryLayers.addImageryProvider(newImageryProvider);
+          newImageryLayer.alpha = layerInfo.opacity ?? 1.0;
+          managedLayers[layerInfo.id] = newImageryLayer;
+        }
+      } else {
+        existingLayer.show = true;
+        existingLayer.alpha = layerInfo.opacity ?? 1.0;
+      }
+    } else if (existingLayer) {
+      existingLayer.show = false;
+    }
+  });
+  const newLayerIds = new Set(layersData.map(l => l.id));
+  for (const managedId in managedLayers) {
+    if (!newLayerIds.has(managedId)) {
+      viewer.imageryLayers.remove(managedLayers[managedId]);
+      delete managedLayers[managedId];
+    }
+  }
+};
+</script>
+
+<style scoped>
+.cesium-container { width: 100%; height: 100%; background-color: #000; }
+</style>

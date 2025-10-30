@@ -131,6 +131,11 @@ const devRoutes = [
         name: 'dev-pro-table',
         component: () => import('@/views/develop/cases/ProTable.case.vue'),
       },
+      {
+        path: 'map-view',
+        name: 'dev-map-view',
+        component: () => import('@/views/develop/cases/MapView.case.vue'),
+      },
     ],
   },
 ];
